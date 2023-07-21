@@ -1,5 +1,6 @@
 import ccxt
-import time
+import pandas_ta as ta
+import pandas as pd
 
 exchange = ccxt.okx({
     'apiKey': '29328226-77af-4516-a7b7-d132e61c4f78',
@@ -15,8 +16,19 @@ balance = exchange.fetch_balance()
 # else:
 #     print(f"No tienes {moneda} en tu cuenta.")
 
+bars = exchange.fetch_ohlcv('BTC/USDT', timeframe = '5m', limit = 300)
 
-while True:
-    valor = exchange.fetch_ticker('BTC/USDT')
-    print(valor['last'])
-    time.sleep(5)
+df = pd.DataFrame(bars, columns=['time', 'open', 'hight', 'low', 'close', 'volume'])
+
+print(df)
+
+adx = ta.adx(df['hight'], df['low'], df['close'])
+
+ema55 = ta.ema(df['close'], 10)
+ema200 = ta.ema(df['close'], 200)
+print(f'ema55 : {ema55}')
+
+print(f'ema200 : {ema200}')
+
+
+print(f'adx :{adx}')
