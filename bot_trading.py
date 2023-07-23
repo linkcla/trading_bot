@@ -11,7 +11,7 @@ exchange = ccxt.okx({
 
 balance = exchange.fetch_balance()
 
-bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=300)
+bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1S', limit=300)
 
 df = pd.DataFrame(
     bars, columns=['times', 'open', 'hight', 'low', 'close', 'volume'])
@@ -19,15 +19,17 @@ df = pd.DataFrame(
 # indicators
 adx = ta.adx(df['hight'], df['low'], df['close'])
 
+rsi = ta.rsi(df['close'])
+
 ema55 = ta.ema(df['close'], 55)
 
 ema200 = ta.ema(df['close'], 200)
 
-df = pd.concat([df, adx, ema55, ema200], axis=1)
+df = pd.concat([df, adx, rsi, ema55, ema200], axis=1)
 
 penultRow = df.iloc[-2]
 lastRow = df.iloc[-1]
-#  times     open    hight      low    close    volume    ADX_14     DMP_14     DMN_14        EMA_55       EMA_200
+#  times     open    hight      low    close    volume    ADX_14     DMP_14     DMN_14        RSI_14        EMA_55       EMA_200
 
 
 def get_movement_force():
@@ -41,7 +43,6 @@ def get_movement_force():
 
         if lastRow['ADX_14'] <= penultRow['ADX_14']:
             output += ' perdiendo fuerza'
-
     else:
         output += 'Movimiento sin fuerza'
 
@@ -64,5 +65,16 @@ def get_trend():
     return output
 
 
+def get_over_s_s():
+    output = '30 < RSI < 70'
+    if lastRow['RSI_14'] > 70:
+        output = 'Sobre compra (venta)'
+    if lastRow['RSI_14'] < 30:
+        output = 'Sobre venta (compra)'
+
+    return output
+
+
 print(get_movement_force())
 print(get_trend())
+print(get_over_s_s())
