@@ -11,70 +11,92 @@ exchange = ccxt.okx({
 
 balance = exchange.fetch_balance()
 
-bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1S', limit=300)
+bars = exchange.fetch_ohlcv('APIX/USDT', timeframe='1d', limit=300)
 
 df = pd.DataFrame(
     bars, columns=['times', 'open', 'hight', 'low', 'close', 'volume'])
 
-# indicators
-adx = ta.adx(df['hight'], df['low'], df['close'])
+# ------------------------ INDICATORS -----------------------
+adx = round(ta.adx(df['hight'], df['low'], df['close']), 2)
 
-rsi = ta.rsi(df['close'])
+rsi = round(ta.rsi(df['close']), 2)
 
-ema55 = ta.ema(df['close'], 55)
+ema55 = round(ta.ema(df['close'], 55), 2)
 
-ema200 = ta.ema(df['close'], 200)
+ema200 = round(ta.ema(df['close'], 200), 2)
 
-df = pd.concat([df, adx, rsi, ema55, ema200], axis=1)
+atr = round(ta.atr(df['hight'], df['low'], df['close'], 14), 2)
 
-penultRow = df.iloc[-2]
-lastRow = df.iloc[-1]
-#  times     open    hight      low    close    volume    ADX_14     DMP_14     DMN_14        RSI_14        EMA_55       EMA_200
+sqz = round(ta.squeeze(df['hight'], df['low'], df['close']), 2)
+
+
+# Concatenate
+
+#  FORMAT:   times   open   hight   low   close   volume   ADX_14   DMP_14   DMN_14   RSI_14   ATRr_14   SQZ_20_2.0_20_1.5   SQZ_ON   SQZ_OFF   SQZ_NO   EMA_55   EMA_200
+df = pd.concat([df, adx, rsi, atr, sqz, ema55, ema200], axis=1)
+print(df)
+actualCandle = df.iloc[-1]
+oneCandle = df.iloc[-2]
+twoCandle = df.iloc[-3]
+threeCandle = df.iloc[-4]
+
+# ------------------------ FUNCTIONS ------------------------
 
 
 def get_movement_force():
     output = ''
-    if lastRow['ADX_14'] > 23:
+    if actualCandle['ADX_14'] > 23:
         output += 'Movimiento con fuerza'
-        if lastRow['DMP_14'] > lastRow['DMN_14']:
+        if actualCandle['DMP_14'] > actualCandle['DMN_14']:
             output += ' alcista'
         else:
             output += ' bajista'
 
-        if lastRow['ADX_14'] <= penultRow['ADX_14']:
+        if actualCandle['ADX_14'] <= oneCandle['ADX_14']:
             output += ' perdiendo fuerza'
     else:
         output += 'Movimiento sin fuerza'
-
     return output
 
 
 def get_trend():
     output = ''
-    if lastRow['EMA_55'] > lastRow['EMA_200']:
+    if actualCandle['EMA_55'] > actualCandle['EMA_200']:
         output += 'Tendencia alcista'
-    elif lastRow['EMA_55'] < lastRow['EMA_200']:
+    elif actualCandle['EMA_55'] < actualCandle['EMA_200']:
         output += 'Tendencia bajista'
     else:
         # ema55 == ema200
-        if penultRow['EMA_55'] > penultRow['EMA_200']:
+        if oneCandle['EMA_55'] > oneCandle['EMA_200']:
             output += 'Cruce de medias hacia arriba'
         else:
             output += 'Cruce de medias hacia abajo'
-
     return output
 
 
 def get_over_s_s():
     output = '30 < RSI < 70'
-    if lastRow['RSI_14'] > 70:
+    if actualCandle['RSI_14'] > 70:
         output = 'Sobre compra (venta)'
-    if lastRow['RSI_14'] < 30:
+    if actualCandle['RSI_14'] < 30:
         output = 'Sobre venta (compra)'
-
     return output
 
 
-print(get_movement_force())
-print(get_trend())
-print(get_over_s_s())
+def get_stop_loss(long_or_short):
+    # long == true
+    if (long_or_short):
+        return round(oneCandle['close'] - (oneCandle['ATRr_14']*1.5), 2)
+    else:
+        return round(oneCandle['close'] + (oneCandle['ATRr_14']*1.5), 2)
+
+
+def get_take_profit(long_or_short):
+    # long == true
+    if (long_or_short):
+        return round(oneCandle['close'] + (oneCandle['ATRr_14']*1.5), 2)
+    else:
+        return round(oneCandle['close'] - (oneCandle['ATRr_14']*1.5), 2)
+
+
+# def get_info_sqz():
