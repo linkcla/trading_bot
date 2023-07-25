@@ -45,17 +45,24 @@ threeCandle = df.iloc[-4]
 
 def get_movement_force():
     output = ''
-    if actualCandle['ADX_14'] > 23:
+    if oneCandle['ADX_14'] > 23:
         output += 'Movimiento con fuerza'
-        if actualCandle['DMP_14'] > actualCandle['DMN_14']:
+        if oneCandle['DMP_14'] > actualCandle['DMN_14']:
             output += ' alcista'
         else:
             output += ' bajista'
 
-        if actualCandle['ADX_14'] <= oneCandle['ADX_14']:
+        if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
             output += ' perdiendo fuerza'
     else:
         output += 'Movimiento sin fuerza'
+        if oneCandle['DMP_14'] > actualCandle['DMN_14']:
+            output += ' alcista'
+        else:
+            output += ' bajista'
+
+        if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
+            output += ' perdiendo fuerza'
     return output
 
 
@@ -84,6 +91,7 @@ def get_over_s_s():
 
 
 def get_stop_loss(long_or_short):
+    """ This function calculates and returns the price of the stop loss """
     # long == true
     if (long_or_short):
         return round(oneCandle['close'] - (oneCandle['ATRr_14']*1.5), 2)
@@ -92,6 +100,7 @@ def get_stop_loss(long_or_short):
 
 
 def get_take_profit(long_or_short):
+    """ This function calculates and returns the price of the take profi """
     # long == true
     if (long_or_short):
         return round(oneCandle['close'] + (oneCandle['ATRr_14']*1.5), 2)
@@ -99,4 +108,24 @@ def get_take_profit(long_or_short):
         return round(oneCandle['close'] - (oneCandle['ATRr_14']*1.5), 2)
 
 
-# def get_info_sqz():
+def get_info_sqz():
+    """ This function returns the buy/sell signals of the Squeeze momentum indicator of Lazy Bear"""
+    if threeCandle['SQZ_20_2.0_20_1.5'] < 0:
+        if threeCandle['SQZ_20_2.0_20_1.5'] > twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] < oneCandle['SQZ_20_2.0_20_1.5']:
+            return 'SQZ buy signal'
+
+    elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
+        if threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']:
+            return 'SQZ sell signal'
+    else:
+        return 'No buy/sell info'
+
+
+# Requisitos para realizar una compra:
+# -Movimiento bajista perdiendo fuerza o movimiento con fuerza alcista
+# -Tendencia alcista o cruce de medias hacia arriba
+# -Señal de compra de SQZ
+
+# Se puede mirar de implementar mas adelante:
+# -Si además el RSI nos marca sobre venta mejor
+# -Revisar como funcionaria con el RSI estoclastico ya que este da mas entradas y se podria combianar mejor con el resto de la estrategia
