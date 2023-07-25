@@ -9,9 +9,7 @@ exchange = ccxt.okx({
     'password': 'TestTrading2023#'
 })
 
-balance = exchange.fetch_balance()
-
-bars = exchange.fetch_ohlcv('APIX/USDT', timeframe='1d', limit=300)
+bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='1d', limit=300)
 
 df = pd.DataFrame(
     bars, columns=['times', 'open', 'hight', 'low', 'close', 'volume'])
@@ -42,52 +40,53 @@ threeCandle = df.iloc[-4]
 
 # ------------------------ FUNCTIONS ------------------------
 
+buy_requisits = {
+    "val1": False,
+    "val2": False,
+    "val3": False
+}
+# val1 -Tendencia alcista o cruce de medias hacia arriba
+# val2 -Movimiento con fuerza bajista perdiendo fuerza o movimiento con fuerza alcista
+# val3 -Señal de compra de SQZ
 
-def get_movement_force():
-    output = ''
-    if oneCandle['ADX_14'] > 23:
-        output += 'Movimiento con fuerza'
-        if oneCandle['DMP_14'] > actualCandle['DMN_14']:
-            output += ' alcista'
-        else:
-            output += ' bajista'
-
-        if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
-            output += ' perdiendo fuerza'
-    else:
-        output += 'Movimiento sin fuerza'
-        if oneCandle['DMP_14'] > actualCandle['DMN_14']:
-            output += ' alcista'
-        else:
-            output += ' bajista'
-
-        if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
-            output += ' perdiendo fuerza'
-    return output
+sell_requisits = {
+    "val1": False
+}
 
 
 def get_trend():
-    output = ''
     if actualCandle['EMA_55'] > actualCandle['EMA_200']:
-        output += 'Tendencia alcista'
-    elif actualCandle['EMA_55'] < actualCandle['EMA_200']:
-        output += 'Tendencia bajista'
-    else:
-        # ema55 == ema200
-        if oneCandle['EMA_55'] > oneCandle['EMA_200']:
-            output += 'Cruce de medias hacia arriba'
+        up_trend = True
+    elif actualCandle['EMA_55'] <= actualCandle['EMA_200']:
+        up_trend = False
+    buy_requisits['val1'] = up_trend
+
+
+def get_movement_force():
+    MIN_FORCE = 23
+    bullish_mov_getting_force = False
+    barish_mov_lossing_force = False
+
+    if oneCandle['ADX_14'] > MIN_FORCE:
+        if oneCandle['DMP_14'] > oneCandle['DMN_14']:
+            if oneCandle['ADX_14'] > twoCandle['ADX_14']:
+                bullish_mov_getting_force = True
         else:
-            output += 'Cruce de medias hacia abajo'
-    return output
+            if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
+                barish_mov_lossing_force = True
+
+    buy_requisits['val2'] = bullish_mov_getting_force or barish_mov_lossing_force
 
 
-def get_over_s_s():
-    output = '30 < RSI < 70'
-    if actualCandle['RSI_14'] > 70:
-        output = 'Sobre compra (venta)'
-    if actualCandle['RSI_14'] < 30:
-        output = 'Sobre venta (compra)'
-    return output
+def get_info_sqz():
+    """ This function returns the buy/sell signals of the Squeeze momentum indicator of Lazy Bear"""
+    if threeCandle['SQZ_20_2.0_20_1.5'] < 0:
+        if threeCandle['SQZ_20_2.0_20_1.5'] > twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] < oneCandle['SQZ_20_2.0_20_1.5']:
+            buy_requisits['val3'] = True
+
+    elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
+        if threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']:
+            sell_requisits['val1'] = True
 
 
 def get_stop_loss(long_or_short):
@@ -108,24 +107,84 @@ def get_take_profit(long_or_short):
         return round(oneCandle['close'] - (oneCandle['ATRr_14']*1.5), 2)
 
 
-def get_info_sqz():
-    """ This function returns the buy/sell signals of the Squeeze momentum indicator of Lazy Bear"""
-    if threeCandle['SQZ_20_2.0_20_1.5'] < 0:
-        if threeCandle['SQZ_20_2.0_20_1.5'] > twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] < oneCandle['SQZ_20_2.0_20_1.5']:
-            return 'SQZ buy signal'
+def buy():
+    buy = True
+    for i in buy_requisits.values():
+        buy &= i
 
-    elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
-        if threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']:
-            return 'SQZ sell signal'
-    else:
-        return 'No buy/sell info'
+    if buy:
+        # buy
+        # put_stop_loss = get_stop_loss(True)
+        # put_take profit = get_take_profit(True)
+        pass
 
 
-# Requisitos para realizar una compra:
-# -Movimiento bajista perdiendo fuerza o movimiento con fuerza alcista
-# -Tendencia alcista o cruce de medias hacia arriba
-# -Señal de compra de SQZ
+def sell():
+    sell = True
+    for i in sell_requisits.values():
+        sell &= i
+    # if sell & position_with_profit:
+    #     sell
 
-# Se puede mirar de implementar mas adelante:
-# -Si además el RSI nos marca sobre venta mejor
-# -Revisar como funcionaria con el RSI estoclastico ya que este da mas entradas y se podria combianar mejor con el resto de la estrategia
+
+# def get_over_s_s():
+#     output = '30 < RSI < 70'
+#     if actualCandle['RSI_14'] > 70:
+#         output = 'Sobre compra (venta)'
+#     if actualCandle['RSI_14'] < 30:
+#         output = 'Sobre venta (compra)'
+#     return output
+
+
+# ------------------- INDICADORES CON MÁS INFO -----------------------
+
+# def get_trend():
+#     output = ''
+#     if actualCandle['EMA_55'] > actualCandle['EMA_200']:
+#         output += 'Tendencia alcista'
+#     elif actualCandle['EMA_55'] < actualCandle['EMA_200']:
+#         output += 'Tendencia bajista'
+#     else:
+#         # ema55 == ema200
+#         if oneCandle['EMA_55'] > oneCandle['EMA_200']:
+#             output += 'Cruce de medias hacia arriba'
+#         else:
+#             output += 'Cruce de medias hacia abajo'
+#     return output
+
+
+# def get_movement_force():
+#     MIN_FORCE = 23
+#     output = ''
+#     if oneCandle['ADX_14'] > MIN_FORCE:
+#         output += 'Movimiento con fuerza'
+#         if oneCandle['DMP_14'] > oneCandle['DMN_14']:
+#             output += ' alcista'
+#         else:
+#             output += ' bajista'
+
+#         if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
+#             output += ' perdiendo fuerza'
+#     else:
+#         output += 'Movimiento sin fuerza'
+#         if oneCandle['DMP_14'] > oneCandle['DMN_14']:
+#             output += ' alcista'
+#         else:
+#             output += ' bajista'
+
+#         if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
+#             output += ' perdiendo fuerza'
+#     return output
+
+
+# def get_info_sqz():
+#     """ This function returns the buy/sell signals of the Squeeze momentum indicator of Lazy Bear"""
+#     if threeCandle['SQZ_20_2.0_20_1.5'] < 0:
+#         if threeCandle['SQZ_20_2.0_20_1.5'] > twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] < oneCandle['SQZ_20_2.0_20_1.5']:
+#             return 'SQZ buy signal'
+
+#     elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
+#         if threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5'] & twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']:
+#             return 'SQZ sell signal'
+#     else:
+#         return 'No buy/sell info'
