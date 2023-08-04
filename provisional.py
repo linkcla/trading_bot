@@ -1,6 +1,7 @@
 # import ccxt
 import pandas_ta as ta
 import pandas as pd
+import matplotlib.pyplot as plt
 import yfinance as yf
 
 # exchange = ccxt.okx({
@@ -11,8 +12,8 @@ import yfinance as yf
 
 # bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='4h', limit=300)
 
-btc = yf.Ticker('META')
-df = btc.history(period='10y', interval='1wk')
+btc = yf.Ticker('BTC-USD')
+df = btc.history(period='1y', interval='1h')
 
 
 # df = pd.DataFrame(
@@ -54,7 +55,7 @@ def get_trend(actualCandle):
 
 
 def get_movement_force(oneCandle, twoCandle):
-    MIN_FORCE = 0
+    MIN_FORCE = 23
     bullish_mov_getting_force = False
     barish_mov_lossing_force = False
 
@@ -79,14 +80,6 @@ def get_info_sqz(oneCandle, twoCandle, threeCandle):
     elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
         if (threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5']) & (twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']):
             return False, True
-
-    # if threeCandle['SQZ_20_2.0_20_1.5'] < 0:
-    #     if (threeCandle['SQZ_20_2.0_20_1.5'] > twoCandle['SQZ_20_2.0_20_1.5']) & (twoCandle['SQZ_20_2.0_20_1.5'] < oneCandle['SQZ_20_2.0_20_1.5']):
-    #         return True, False
-
-    # elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
-    #     if (threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5']) & (twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']):
-    #         return False, True
 
     return False, False
 
@@ -116,7 +109,7 @@ def get_take_profit(long_or_short, oneCandle):
     """ This function calculates and returns the price of the take profi """
     # long == true
     if (long_or_short):
-        return round(oneCandle['Close'] + (oneCandle['ATRr_14']*3), 2)
+        return round(oneCandle['Close'] + (oneCandle['ATRr_14']*1), 2)
     else:
         return round(oneCandle['Close'] - (oneCandle['ATRr_14']*1.5), 2)
 
@@ -125,7 +118,7 @@ def get_take_profit(long_or_short, oneCandle):
 
 def main():
     contador = 0
-    entry_date = []
+    first_entry = []
     PnL = []
     win = 0
     loss = 0
@@ -133,6 +126,13 @@ def main():
     entry_price = -1
     stop_loss = -1
     take_profit = -1
+    first = True
+
+    x = []
+    y = []
+    y200 = []
+    y55 = []
+
     for i in range(204, len(df)):
 
         aux_df = df.head(i + 1)
@@ -169,11 +169,20 @@ def main():
         # Open position
         if buy_requisits['val1'] & buy_requisits['val2'] & buy_requisits['val3'] & (not running_position):
             running_position = True
-            entry_date.append(actualCandle['Open'])
             entry_price = actualCandle['Close']
             stop_loss = get_stop_loss(True, oneCandle)
             take_profit = get_take_profit(True, oneCandle)
             contador += 1
+            plt.scatter(actualCandle.name,
+                        actualCandle['Open'], c='purple', s=25, label='Open')
+            plt.scatter(actualCandle.name, stop_loss,
+                        c='red', s=25, label='Stop')
+            plt.scatter(actualCandle.name, take_profit,
+                        c='g', s=25, label='Profit')
+
+            if first:
+                first_entry = actualCandle.name
+                first = False
 
         if running_position:
 
@@ -197,13 +206,23 @@ def main():
                 win += 1
                 PnL.append((take_profit/entry_price) - 1)
 
+        x.append(actualCandle.name)
+        y.append(actualCandle['Open'])
+        y200.append(actualCandle['EMA_200'])
+        y55.append(actualCandle['EMA_55'])
+
+    plt.plot(x, y200, linewidth=1.0, color='yellow')
+    plt.plot(x, y55, linewidth=1.0, color='blue')
+    plt.plot(x, y, linewidth=2.0, color='black')
+
     print(f'{contador=}')
-    # print(f'{entry_date=}')
+    print(f'{first_entry=}')
     print(f'{PnL=}')
     print(f'% PnL {sum(PnL) * 100}')
     print(f'si operaramos con 100$ tendriamos: {100 + sum(PnL)*100}')
     print(f'{win=}')
     print(f'{loss=}')
+    plt.show()
 
 
 main()
