@@ -13,7 +13,7 @@ import yfinance as yf
 # bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='4h', limit=300)
 
 btc = yf.Ticker('BTC-USD')
-df = btc.history(period='1y', interval='1h')
+df = btc.history(period='2y', interval='1d')
 
 
 # df = pd.DataFrame(
@@ -49,12 +49,12 @@ df = pd.concat([df, adx, atr, sqz, ema55, ema200, stochrsi, rsi], axis=1)
 def get_trend(actualCandle):
     if actualCandle['EMA_55'] > actualCandle['EMA_200']:
         up_trend = True
-    elif actualCandle['EMA_55'] <= actualCandle['EMA_200']:
+    else:
         up_trend = False
     return up_trend
 
 
-def get_movement_force(oneCandle, twoCandle):
+def get_movement_force_long(oneCandle, twoCandle):
     MIN_FORCE = 23
     bullish_mov_getting_force = False
     barish_mov_lossing_force = False
@@ -70,6 +70,22 @@ def get_movement_force(oneCandle, twoCandle):
     return bullish_mov_getting_force or barish_mov_lossing_force
 
 
+def get_movement_force_short(oneCandle, twoCandle):
+    MIN_FORCE = 23
+    barish_mov_getting_force = False
+    bulish_mov_lossing_force = False
+
+    if oneCandle['ADX_14'] > MIN_FORCE:
+        if oneCandle['DMN_14'] > oneCandle['DMP_14']:
+            if oneCandle['ADX_14'] > twoCandle['ADX_14']:
+                barish_mov_getting_force = True
+        else:
+            if oneCandle['ADX_14'] <= twoCandle['ADX_14']:
+                bulish_mov_lossing_force = True
+
+    return barish_mov_getting_force or bulish_mov_lossing_force
+
+
 def get_info_sqz(oneCandle, twoCandle, threeCandle):
     """ This function returns the buy/sell signals of the Squeeze momentum indicator of Lazy Bear"""
 
@@ -78,22 +94,10 @@ def get_info_sqz(oneCandle, twoCandle, threeCandle):
             return True, False
 
     elif threeCandle['SQZ_20_2.0_20_1.5'] > 0:
-        if (threeCandle['SQZ_20_2.0_20_1.5'] < twoCandle['SQZ_20_2.0_20_1.5']) & (twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']):
+        if (twoCandle['SQZ_20_2.0_20_1.5'] > oneCandle['SQZ_20_2.0_20_1.5']):
             return False, True
-
+    #      buy  , sell
     return False, False
-
-
-def over_sell_rsi(oneCandle):
-    if oneCandle['RSI_14'] < 30:
-        return True
-    return False
-
-
-def over_sell_stoch(oneCandle):
-    if (oneCandle['STOCHRSIk_14_14_3_3'] < 20) & (oneCandle['STOCHRSIk_14_14_3_3'] < oneCandle['STOCHRSId_14_14_3_3']):
-        return True
-    return False
 
 
 def get_stop_loss(long_or_short, oneCandle):
@@ -109,7 +113,7 @@ def get_take_profit(long_or_short, oneCandle):
     """ This function calculates and returns the price of the take profi """
     # long == true
     if (long_or_short):
-        return round(oneCandle['Close'] + (oneCandle['ATRr_14']*1), 2)
+        return round(oneCandle['Close'] + (oneCandle['ATRr_14']*1.5), 2)
     else:
         return round(oneCandle['Close'] - (oneCandle['ATRr_14']*1.5), 2)
 
@@ -122,11 +126,11 @@ def main():
     PnL = []
     win = 0
     loss = 0
-    running_position = False
+    running_long_position = False
+    running_short_position = False
     entry_price = -1
     stop_loss = -1
     take_profit = -1
-    first = True
 
     x = []
     y = []
@@ -141,15 +145,16 @@ def main():
         # val2 -Movimiento con fuerza bajista perdiendo fuerza o movimiento con fuerza alcista
         # val3 -Señal de compra de SQZ
 
-        buy_requisits = {
+        long_requisits = {
+            "val1": False,
+            "val2": False,
+            "val3": False
+        }
+        short_requisits = {
             "val1": False,
             "val2": False,
             "val3": False,
-            "val4": False,
-            "val5": False
-        }
-        sell_requisits = {
-            "val1": False
+            "val4": False
         }
 
         actualCandle = aux_df.iloc[-1]
@@ -157,18 +162,28 @@ def main():
         twoCandle = aux_df.iloc[-3]
         threeCandle = aux_df.iloc[-4]
 
-        buy_requisits['val1'] = get_trend(actualCandle)
-        buy_requisits['val2'] = get_movement_force(oneCandle, twoCandle)
-        buy_sell = get_info_sqz(oneCandle, twoCandle, threeCandle)
-        buy_requisits['val3'] = buy_sell[0]
-        buy_requisits['val4'] = over_sell_stoch(oneCandle)
-        buy_requisits['val5'] = over_sell_rsi(oneCandle)
+        long_short = get_info_sqz(oneCandle, twoCandle, threeCandle)
 
-        sell_requisits['val1'] = buy_sell[1]
+        # True --> bull trend;  False --> bulish trend
+        trend = get_trend(actualCandle)
 
+        # -------- LONG REQUISITS -----------
+        long_requisits['val1'] = trend
+        long_requisits['val2'] = get_movement_force_long(oneCandle, twoCandle)
+        long_requisits['val3'] = long_short[0]
+
+        # -------- SHORT REQUISITS ----------
+        short_requisits['val1'] = not trend
+        short_requisits['val2'] = get_movement_force_short(
+            oneCandle, twoCandle)
+        short_requisits['val3'] = long_short[1]
+        short_requisits['val4'] = not (
+            actualCandle['Close'] > actualCandle['EMA_200'])
+
+        # ------------------ LONG position ------------------
         # Open position
-        if buy_requisits['val1'] & buy_requisits['val2'] & buy_requisits['val3'] & (not running_position):
-            running_position = True
+        if long_requisits['val1'] & long_requisits['val2'] & long_requisits['val3'] & (not running_long_position):
+            running_long_position = True
             entry_price = actualCandle['Close']
             stop_loss = get_stop_loss(True, oneCandle)
             take_profit = get_take_profit(True, oneCandle)
@@ -180,31 +195,56 @@ def main():
             plt.scatter(actualCandle.name, take_profit,
                         c='g', s=25, label='Profit')
 
-            if first:
-                first_entry = actualCandle.name
-                first = False
-
-        if running_position:
+        if running_long_position:
 
             # Check if we take stop loss
             if actualCandle['Low'] <= stop_loss:
-                running_position = False
+                running_long_position = False
                 loss += 1
                 PnL.append((stop_loss/entry_price) - 1)
 
             # Check if we have a sell signal of SQZ when we are in a winning position
-            if get_info_sqz(oneCandle, twoCandle, threeCandle)[1]:
-                actual_price = actualCandle['Close']
-                if actual_price > entry_price:
-                    running_position = False
-                    win += 1
-                    PnL.append((actual_price/entry_price) - 1)
+            # if get_info_sqz(oneCandle, twoCandle, threeCandle)[1]:
+            #     actual_price = actualCandle['Close']
+            #     if actual_price > entry_price:
+            #         running_long_position = False
+            #         win += 1
+            #         PnL.append((actual_price/entry_price) - 1)
 
             # Check if we take take profit
             if actualCandle['High'] >= take_profit:
-                running_position = False
+                running_long_position = False
                 win += 1
                 PnL.append((take_profit/entry_price) - 1)
+
+        # ------------------ SHORT position ------------------
+        # Open position
+        if short_requisits['val1'] & short_requisits['val2'] & short_requisits['val3'] & short_requisits['val4'] & (not running_short_position):
+            running_short_position = True
+            entry_price = actualCandle['Close']
+            stop_loss = get_stop_loss(False, oneCandle)
+            take_profit = get_take_profit(False, oneCandle)
+            contador += 1
+            plt.scatter(actualCandle.name,
+                        actualCandle['Open'], c='purple', s=25, label='Open')
+            plt.scatter(actualCandle.name, stop_loss,
+                        c='red', s=25, label='Stop')
+            plt.scatter(actualCandle.name, take_profit,
+                        c='g', s=25, label='Profit')
+
+        if running_short_position:
+
+            # Check if we take stop loss
+            if actualCandle['High'] >= stop_loss:
+                running_short_position = False
+                loss += 1
+                PnL.append(-((stop_loss/entry_price) - 1))
+
+            # Check if we take take profit
+            if actualCandle['Low'] <= take_profit:
+                running_short_position = False
+                win += 1
+                PnL.append(-((take_profit/entry_price) - 1))
 
         x.append(actualCandle.name)
         y.append(actualCandle['Open'])
