@@ -13,8 +13,7 @@ import yfinance as yf
 # bars = exchange.fetch_ohlcv('BTC/USDT', timeframe='4h', limit=300)
 
 btc = yf.Ticker('BTC-USD')
-df = btc.history(period='2y', interval='1d')
-
+df = btc.history(period='1mo', interval='5m')
 
 # df = pd.DataFrame(
 #     bars, columns=['Date', 'Open', 'High', 'Low', 'Close'])
@@ -110,12 +109,110 @@ def get_stop_loss(long_or_short, oneCandle):
 
 
 def get_take_profit(long_or_short, oneCandle):
-    """ This function calculates and returns the price of the take profi """
+    """ This function calculates and returns the price of the take profit """
     # long == true
     if (long_or_short):
         return round(oneCandle['Close'] + (oneCandle['ATRr_14']*1.5), 2)
     else:
         return round(oneCandle['Close'] - (oneCandle['ATRr_14']*1.5), 2)
+
+
+# ------------ PATRONES DE VELAS ------------
+
+# ---- Patrones bajistas ----
+
+def barish_engulfing(oneCandle, twoCandle):
+    if oneCandle['Open'] > twoCandle['Close'] and oneCandle['Close'] < twoCandle['Open']:
+        return True
+    return False
+
+
+def barish_doji(oneCandle, twoCandle):
+    if (oneCandle['Open'] > twoCandle['Close'] and
+            abs(oneCandle['Close'] - oneCandle['Open']) <= (oneCandle['High'] - oneCandle['Low']) * 0.1):
+        return True
+    return False
+
+
+def evening_star(oneCandle, twoCandle, threeCandle):
+    if (
+        oneCandle['Open'] > twoCandle['Close'] and
+        twoCandle['Open'] > threeCandle['Close'] and
+        oneCandle['Close'] < twoCandle['Open'] and
+        twoCandle['Close'] < threeCandle['Open']
+    ):
+        return True
+    return False
+
+
+def three_black_crows(oneCandle, twoCandle, threeCandle):
+    if (
+        oneCandle['Open'] < twoCandle['Close'] and
+        twoCandle['Open'] < threeCandle['Close'] and
+        oneCandle['Close'] < twoCandle['Open'] and
+        twoCandle['Close'] < threeCandle['Open']
+    ):
+        return True
+    return False
+
+# ---- Patrones alcistas ----
+
+
+def bulish_engolfing(oneCandle, twoCandle):
+    if oneCandle['Open'] < twoCandle['Close'] and oneCandle['Close'] > twoCandle['Open']:
+        return True
+    return False
+
+
+def bullish_doji(oneCandle, twoCandle):
+    if oneCandle['Open'] < twoCandle['Close'] and abs(oneCandle['Close'] - oneCandle['Open']) <= (oneCandle['High'] - oneCandle['Low']) * 0.1:
+        return True
+    return False
+
+
+def hammer(oneCandle, twoCandle):
+    if oneCandle['Open'] < twoCandle['Close'] and oneCandle['Close'] > twoCandle['Open'] and (oneCandle['Close'] - oneCandle['Low']) >= 2 * (oneCandle['Open'] - oneCandle['Close']):
+        return True
+    return False
+
+
+def morning_star(oneCandle, twoCandle, threeCandle):
+    if (
+        oneCandle['Open'] < twoCandle['Close'] and
+        twoCandle['Open'] < threeCandle['Close'] and
+        oneCandle['Close'] > twoCandle['Open'] and
+        twoCandle['Close'] > threeCandle['Open']
+    ):
+        return True
+    return False
+
+
+def three_white_soldiers(oneCandle, twoCandle, threeCandle):
+    if (
+        oneCandle['Open'] > twoCandle['Close'] and
+        twoCandle['Open'] > threeCandle['Close'] and
+        oneCandle['Close'] > twoCandle['Open'] and
+        twoCandle['Close'] > threeCandle['Open']
+    ):
+        return True
+    return False
+
+
+# --------- Mirar si existe algun patron de velas activo ---------
+
+def bulish_candle_pattern(oneCandle, twoCandle, threeCandle):
+    return (bulish_engolfing(oneCandle, twoCandle) |
+            bullish_doji(oneCandle, twoCandle) |
+            hammer(oneCandle, twoCandle) |
+            morning_star(oneCandle, twoCandle, threeCandle) |
+            three_white_soldiers(oneCandle, twoCandle, threeCandle))
+
+
+def barish_candle_pattern(oneCandle, twoCandle, threeCandle):
+    return (barish_engulfing(oneCandle, twoCandle) |
+            barish_doji(oneCandle, twoCandle) |
+            evening_star(oneCandle, twoCandle, threeCandle) |
+            three_black_crows(oneCandle, twoCandle, threeCandle))
 
 # -----------------------------------------------------------
 
@@ -148,13 +245,16 @@ def main():
         long_requisits = {
             "val1": False,
             "val2": False,
-            "val3": False
+            "val3": False,
+            "val4": False,
+            "val5": False
         }
         short_requisits = {
             "val1": False,
             "val2": False,
             "val3": False,
-            "val4": False
+            "val4": False,
+            "val5": False
         }
 
         actualCandle = aux_df.iloc[-1]
@@ -171,6 +271,10 @@ def main():
         long_requisits['val1'] = trend
         long_requisits['val2'] = get_movement_force_long(oneCandle, twoCandle)
         long_requisits['val3'] = long_short[0]
+        long_requisits['val4'] = (
+            actualCandle['Close'] > actualCandle['EMA_200'])
+        long_requisits['val5'] = bulish_candle_pattern(
+            oneCandle, twoCandle, threeCandle)
 
         # -------- SHORT REQUISITS ----------
         short_requisits['val1'] = not trend
@@ -179,10 +283,12 @@ def main():
         short_requisits['val3'] = long_short[1]
         short_requisits['val4'] = not (
             actualCandle['Close'] > actualCandle['EMA_200'])
+        short_requisits['val5'] = barish_candle_pattern(
+            oneCandle, twoCandle, threeCandle)
 
         # ------------------ LONG position ------------------
         # Open position
-        if long_requisits['val1'] & long_requisits['val2'] & long_requisits['val3'] & (not running_long_position):
+        if long_requisits['val1'] & long_requisits['val2'] & long_requisits['val3'] & long_requisits['val4'] & long_requisits['val5'] & (not running_long_position):
             running_long_position = True
             entry_price = actualCandle['Close']
             stop_loss = get_stop_loss(True, oneCandle)
@@ -219,7 +325,7 @@ def main():
 
         # ------------------ SHORT position ------------------
         # Open position
-        if short_requisits['val1'] & short_requisits['val2'] & short_requisits['val3'] & short_requisits['val4'] & (not running_short_position):
+        if short_requisits['val1'] & short_requisits['val2'] & short_requisits['val3'] & short_requisits['val4'] & short_requisits['val5'] & (not running_short_position):
             running_short_position = True
             entry_price = actualCandle['Close']
             stop_loss = get_stop_loss(False, oneCandle)
